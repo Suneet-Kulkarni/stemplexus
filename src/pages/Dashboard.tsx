@@ -1,388 +1,700 @@
 
-import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Trophy,
+  BookOpen,
+  LineChart,
+  Clock,
+  ArrowUpRight,
+  Zap,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AreaChart, BarChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { AtomIcon, Award, BookOpen, BrainCircuit, ChevronRight, Clock, FlaskConical, GraduationCap, LineChart, Rocket, Trophy, Users } from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import { Link } from 'react-router-dom';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart as RechartsLineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
+import { Tables } from "@/integrations/supabase/types";
 
-// Mock data for progress charts
-const weeklyProgress = [
-  { name: 'Mon', progress: 20 },
-  { name: 'Tue', progress: 35 },
-  { name: 'Wed', progress: 45 },
-  { name: 'Thu', progress: 60 },
-  { name: 'Fri', progress: 75 },
-  { name: 'Sat', progress: 85 },
-  { name: 'Sun', progress: 90 },
-];
+interface UserProgress extends Tables<'user_progress'> {
+  topics: {
+    name: string;
+    difficulty: string;
+    subject_id: string;
+  };
+  assessments: {
+    title: string;
+    difficulty: string;
+  };
+}
 
-const subjectProgress = [
-  { subject: 'Algebra', completed: 65, total: 100 },
-  { subject: 'Geometry', completed: 42, total: 100 },
-  { subject: 'Biology', completed: 78, total: 100 },
-  { subject: 'Chemistry', completed: 30, total: 100 },
-  { subject: 'Physics', completed: 55, total: 100 },
-];
-
-const recentActivities = [
-  {
-    id: 1,
-    title: 'Completed Algebra Quiz',
-    description: 'Scored 85% on Linear Equations',
-    time: '2 hours ago',
-    icon: <svg className="w-5 h-5 text-stem-purple" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 22l-3-3m3 3l3-3m-3 3V10m-9-8l3 3m-3-3l3 3M3 2v12m18-12l-3 3m3-3l-3 3m3-3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>,
-  },
-  {
-    id: 2,
-    title: 'Joined Biology Study Group',
-    description: 'Cellular Respiration Discussion',
-    time: '1 day ago',
-    icon: <FlaskConical className="w-5 h-5 text-stem-teal" />,
-  },
-  {
-    id: 3,
-    title: 'Earned Achievement',
-    description: 'Problem Solver: 50 Math Problems Solved',
-    time: '2 days ago',
-    icon: <Trophy className="w-5 h-5 text-yellow-500" />,
-  },
-];
-
-const recommendedCourses = [
-  {
-    id: 1,
-    title: 'Advanced Algebra Concepts',
-    description: 'Building on your recent quiz results',
-    progress: 0,
-    image: 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3',
-    icon: <svg className="w-5 h-5 text-stem-purple" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 22l-3-3m3 3l3-3m-3 3V10m-9-8l3 3m-3-3l3 3M3 2v12m18-12l-3 3m3-3l-3 3m3-3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>,
-  },
-  {
-    id: 2,
-    title: 'Chemistry Fundamentals',
-    description: 'Recommended based on your interests',
-    progress: 0,
-    image: 'https://images.unsplash.com/photo-1603126857599-f6e157fa2fe6?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3',
-    icon: <FlaskConical className="w-5 h-5 text-stem-teal" />,
-  },
-  {
-    id: 3,
-    title: 'Physics in Everyday Life',
-    description: 'Engaging introduction to basic physics',
-    progress: 0,
-    image: 'https://images.unsplash.com/photo-1636466497217-26a8cbeaf0aa?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3',
-    icon: <Rocket className="w-5 h-5 text-stem-blue" />,
-  },
-];
-
-const upcomingChallenges = [
-  {
-    id: 1,
-    title: 'Math Olympics',
-    date: 'Starts in 2 days',
-    participants: 128,
-    difficulty: 'Intermediate',
-  },
-  {
-    id: 2,
-    title: 'Science Experiment Challenge',
-    date: 'Starts in 5 days',
-    participants: 87,
-    difficulty: 'Beginner',
-  },
-];
+interface SubjectProgress {
+  id: string;
+  name: string;
+  completed: number;
+  total: number;
+  averageScore: number;
+}
 
 const Dashboard = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
+  const [subjects, setSubjects] = useState<Tables<'subjects'>[]>([]);
+  const [subjectProgress, setSubjectProgress] = useState<SubjectProgress[]>([]);
+  const [recentActivity, setRecentActivity] = useState<UserProgress[]>([]);
+  const [totalTopics, setTotalTopics] = useState(0);
+  const [completedTopics, setCompletedTopics] = useState(0);
+  const [averageScore, setAverageScore] = useState(0);
+  const [learningStreak, setLearningStreak] = useState(0);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        
+        // Fetch user progress with related data
+        const { data: progressData, error: progressError } = await supabase
+          .from('user_progress')
+          .select(`
+            *,
+            topics:topic_id (name, difficulty, subject_id),
+            assessments:assessment_id (title, difficulty)
+          `)
+          .eq('user_id', user.id)
+          .order('completed_at', { ascending: false });
+        
+        if (progressError) throw progressError;
+        
+        setUserProgress(progressData);
+        setRecentActivity(progressData.slice(0, 5));
+        
+        // Calculate overall statistics
+        if (progressData.length > 0) {
+          const scores = progressData.map(p => p.score).filter(s => s !== null) as number[];
+          const avgScore = scores.length > 0 
+            ? scores.reduce((sum, score) => sum + score, 0) / scores.length 
+            : 0;
+          setAverageScore(Math.round(avgScore));
+          
+          // Get unique completed topics
+          const uniqueTopics = new Set(progressData.map(p => p.topic_id));
+          setCompletedTopics(uniqueTopics.size);
+          
+          // Calculate learning streak (simplified)
+          setLearningStreak(Math.min(7, Math.floor(progressData.length / 2))); // Simplified calculation
+        }
+        
+        // Fetch all subjects
+        const { data: subjectsData, error: subjectsError } = await supabase
+          .from('subjects')
+          .select('*');
+        
+        if (subjectsError) throw subjectsError;
+        setSubjects(subjectsData);
+        
+        // Fetch total number of topics
+        const { count: topicsCount, error: topicsError } = await supabase
+          .from('topics')
+          .select('*', { count: 'exact', head: true });
+        
+        if (topicsError) throw topicsError;
+        setTotalTopics(topicsCount || 0);
+        
+        // Calculate subject progress
+        if (subjectsData.length > 0 && progressData.length > 0) {
+          const subjectStats: Record<string, {
+            id: string,
+            name: string, 
+            completed: Set<string>, 
+            scores: number[]
+          }> = {};
+          
+          // Initialize subjects
+          subjectsData.forEach(subject => {
+            subjectStats[subject.id] = {
+              id: subject.id,
+              name: subject.name,
+              completed: new Set(),
+              scores: []
+            };
+          });
+          
+          // Collect progress data by subject
+          progressData.forEach(progress => {
+            if (progress.topics?.subject_id && progress.topic_id) {
+              const subjectId = progress.topics.subject_id;
+              if (subjectStats[subjectId]) {
+                subjectStats[subjectId].completed.add(progress.topic_id);
+                if (progress.score !== null) {
+                  subjectStats[subjectId].scores.push(progress.score);
+                }
+              }
+            }
+          });
+          
+          // Calculate subject-specific progress stats
+          const subjectProgressData = await Promise.all(
+            Object.values(subjectStats).map(async (stat) => {
+              // Get total topics for this subject
+              const { count, error } = await supabase
+                .from('topics')
+                .select('*', { count: 'exact', head: true })
+                .eq('subject_id', stat.id);
+              
+              if (error) throw error;
+              
+              const total = count || 0;
+              const avgScore = stat.scores.length > 0
+                ? stat.scores.reduce((sum, score) => sum + score, 0) / stat.scores.length
+                : 0;
+              
+              return {
+                id: stat.id,
+                name: stat.name,
+                completed: stat.completed.size,
+                total,
+                averageScore: Math.round(avgScore)
+              };
+            })
+          );
+          
+          setSubjectProgress(subjectProgressData);
+        }
+      } catch (error: any) {
+        toast({
+          title: "Error fetching data",
+          description: error.message,
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [user, toast]);
+
+  const getPerformanceColor = (score: number | null) => {
+    if (score === null) return "text-gray-500";
+    if (score >= 80) return "text-green-500";
+    if (score >= 60) return "text-yellow-500";
+    return "text-red-500";
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  };
+
+  // Prepare chart data
+  const scoreDistributionData = [
+    { range: "0-20", count: userProgress.filter(p => p.score !== null && p.score <= 20).length },
+    { range: "21-40", count: userProgress.filter(p => p.score !== null && p.score > 20 && p.score <= 40).length },
+    { range: "41-60", count: userProgress.filter(p => p.score !== null && p.score > 40 && p.score <= 60).length },
+    { range: "61-80", count: userProgress.filter(p => p.score !== null && p.score > 60 && p.score <= 80).length },
+    { range: "81-100", count: userProgress.filter(p => p.score !== null && p.score > 80).length },
+  ];
+
+  const subjectPerformanceData = subjectProgress.map(subject => ({
+    name: subject.name,
+    score: subject.averageScore,
+    progress: (subject.completed / Math.max(1, subject.total)) * 100
+  }));
+
+  // Mock data for timeline (we'd need more sophisticated tracking for real data)
+  const timelineData = Array.from({ length: 7 }, (_, i) => ({
+    day: new Date(Date.now() - (6 - i) * 86400000).toLocaleDateString('en-US', { weekday: 'short' }),
+    value: Math.floor(Math.random() * 3) + (i === 6 ? 2 : 0)
+  }));
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
   return (
-    <div className="min-h-screen flex flex-col">
-      <Navbar userLoggedIn={true} />
-      <main className="flex-grow py-6 md:py-12 pt-20">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-start mb-8">
-            <div>
-              <h1 className="text-3xl font-bold">Dashboard</h1>
-              <p className="text-foreground/70">Welcome back, Taylor! Here's your learning progress.</p>
-            </div>
-            <div className="flex gap-4 mt-4 md:mt-0">
-              <Button variant="outline" className="flex items-center gap-2">
-                <LineChart className="w-4 h-4" />
-                View Reports
-              </Button>
-              <Button className="flex items-center gap-2">
-                <GraduationCap className="w-4 h-4" />
-                Resume Learning
-              </Button>
-            </div>
+    <div className="container py-8">
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Your Learning Dashboard</h1>
+          <Button onClick={() => navigate('/subjects')}>
+            Browse Subjects
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Overall Progress</CardTitle>
-                <Award className="w-4 h-4 text-primary" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">68%</div>
-                <p className="text-xs text-foreground/70">Grade 9 curriculum</p>
-                <Progress value={68} className="h-2 mt-2" />
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Study Streak</CardTitle>
-                <Clock className="w-4 h-4 text-yellow-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">12 Days</div>
-                <p className="text-xs text-foreground/70">Current streak</p>
-                <div className="flex items-center gap-1 mt-2">
-                  {Array.from({ length: 7 }).map((_, i) => (
-                    <div 
-                      key={i} 
-                      className={`h-2 w-full rounded-full ${i < 5 ? 'bg-yellow-500' : 'bg-muted'}`}
-                    />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Achievements</CardTitle>
-                <Trophy className="w-4 h-4 text-amber-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">15 / 48</div>
-                <p className="text-xs text-foreground/70">Badges earned</p>
-                <div className="flex items-center gap-1 mt-2">
-                  <div className="flex -space-x-2">
-                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs">
-                      <BrainCircuit className="w-3 h-3" />
-                    </div>
-                    <div className="w-6 h-6 rounded-full bg-stem-blue/20 flex items-center justify-center text-stem-blue text-xs">
-                      <FlaskConical className="w-3 h-3" />
-                    </div>
-                    <div className="w-6 h-6 rounded-full bg-stem-purple/20 flex items-center justify-center text-stem-purple text-xs">
-                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 22l-3-3m3 3l3-3m-3 3V10m-9-8l3 3m-3-3l3 3M3 2v12m18-12l-3 3m3-3l-3 3m3-3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                    <div className="w-6 h-6 rounded-full bg-foreground/10 flex items-center justify-center text-foreground/70 text-xs">
-                      <span>+12</span>
-                    </div>
+        ) : (
+          <>
+            {/* Progress Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">Completed Topics</CardTitle>
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {completedTopics} <span className="text-sm font-normal text-muted-foreground">/ {totalTopics}</span>
                   </div>
+                  <Progress 
+                    value={(completedTopics / Math.max(1, totalTopics)) * 100} 
+                    className="h-2 mt-2" 
+                  />
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">Average Score</CardTitle>
+                  <Trophy className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {averageScore}%
+                  </div>
+                  <Progress 
+                    value={averageScore} 
+                    className="h-2 mt-2" 
+                  />
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">Learning Streak</CardTitle>
+                  <Zap className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {learningStreak} days
+                  </div>
+                  <div className="flex items-center gap-1 mt-2">
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <div 
+                        key={i} 
+                        className={`h-2 w-full rounded-full ${i < learningStreak ? 'bg-primary' : 'bg-muted'}`}
+                      ></div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {recentActivity.length > 0 ? formatDate(recentActivity[0]?.completed_at).split(',')[0] : "No activity"}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {recentActivity.length > 0 
+                      ? `${recentActivity[0]?.assessments?.title || recentActivity[0]?.topics?.name || "Assessment"}`
+                      : "Start learning to track your progress"}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Main Content */}
+            <Tabs defaultValue="overview" className="w-full">
+              <TabsList className="mb-6">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="subjects">Subjects</TabsTrigger>
+                <TabsTrigger value="performance">Performance</TabsTrigger>
+                <TabsTrigger value="activity">Activity</TabsTrigger>
+              </TabsList>
+              
+              {/* Overview Tab */}
+              <TabsContent value="overview" className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <Card className="lg:col-span-2">
+                    <CardHeader>
+                      <CardTitle>Learning Progress</CardTitle>
+                      <CardDescription>Your progress across all subjects</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={subjectPerformanceData}
+                            margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <Tooltip />
+                            <Bar dataKey="progress" name="Progress %" fill="#8884d8" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="score" name="Avg. Score" fill="#82ca9d" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Score Distribution</CardTitle>
+                      <CardDescription>How your assessment scores are distributed</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={scoreDistributionData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={80}
+                              fill="#8884d8"
+                              paddingAngle={5}
+                              dataKey="count"
+                              label={({range}) => range}
+                            >
+                              {scoreDistributionData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>Learning Progress</CardTitle>
-                <CardDescription>Your activity over the past week</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="week">
-                  <TabsList className="mb-4">
-                    <TabsTrigger value="week">Week</TabsTrigger>
-                    <TabsTrigger value="month">Month</TabsTrigger>
-                    <TabsTrigger value="year">Year</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="week">
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Recent Activity</CardTitle>
+                    <CardDescription>Your latest learning activities</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {recentActivity.length > 0 ? (
+                      <div className="space-y-4">
+                        {recentActivity.map((activity, index) => (
+                          <div key={index} className="flex items-start justify-between border-b pb-4 last:border-0 last:pb-0">
+                            <div className="flex items-start gap-4">
+                              <div className="rounded-full bg-primary/10 p-2">
+                                {activity.assessment_id ? (
+                                  <FileCheck className="h-4 w-4 text-primary" />
+                                ) : (
+                                  <BookOpen className="h-4 w-4 text-primary" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-medium">{activity.assessments?.title || activity.topics?.name || "Completed assessment"}</p>
+                                <p className="text-sm text-muted-foreground">{formatDate(activity.completed_at)}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {activity.score !== null ? (
+                                <>
+                                  {activity.score >= 70 ? <CheckCircle className="h-5 w-5 text-green-500" /> : <AlertCircle className="h-5 w-5 text-amber-500" />}
+                                  <span className={`font-medium ${getPerformanceColor(activity.score)}`}>
+                                    {activity.score}%
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground">Completed</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">No recent activity found</p>
+                        <Button className="mt-4" onClick={() => navigate('/subjects')}>Start Learning</Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              {/* Subjects Tab */}
+              <TabsContent value="subjects" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Subject Progress</CardTitle>
+                    <CardDescription>Your learning journey by subject</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      {subjectProgress.map((subject) => (
+                        <div key={subject.id} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">{subject.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {subject.completed} of {subject.total} topics completed
+                              </p>
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              className="gap-1"
+                              onClick={() => navigate(`/subjects/${subject.id}/topics`)}
+                            >
+                              View Topics <ArrowUpRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <Progress 
+                            value={(subject.completed / Math.max(1, subject.total)) * 100} 
+                            className="h-2" 
+                          />
+                        </div>
+                      ))}
+                      
+                      {subjectProgress.length === 0 && (
+                        <div className="text-center py-8">
+                          <p className="text-muted-foreground">No subject progress found</p>
+                          <Button className="mt-4" onClick={() => navigate('/subjects')}>Browse Subjects</Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                {subjects.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {subjects.map((subject) => {
+                      const progress = subjectProgress.find(sp => sp.id === subject.id);
+                      return (
+                        <Card key={subject.id} className="overflow-hidden">
+                          <CardHeader className="pb-2">
+                            <CardTitle>{subject.name}</CardTitle>
+                            <CardDescription>{subject.description || `Explore ${subject.name} topics and assessments`}</CardDescription>
+                          </CardHeader>
+                          <CardContent className="pb-2">
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span>Progress</span>
+                                <span>
+                                  {progress ? `${progress.completed}/${progress.total} topics` : '0/0 topics'}
+                                </span>
+                              </div>
+                              <Progress 
+                                value={progress ? (progress.completed / Math.max(1, progress.total)) * 100 : 0} 
+                                className="h-2" 
+                              />
+                            </div>
+                          </CardContent>
+                          <CardFooter>
+                            <Button 
+                              variant="default" 
+                              className="w-full"
+                              onClick={() => navigate(`/subjects/${subject.id}/topics`)}
+                            >
+                              Continue Learning
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
+              
+              {/* Performance Tab */}
+              <TabsContent value="performance" className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Score Distribution</CardTitle>
+                      <CardDescription>How your assessment scores are distributed</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={scoreDistributionData}
+                            margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="range" />
+                            <YAxis />
+                            <Tooltip />
+                            <Bar dataKey="count" name="Number of Assessments" fill="#8884d8" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Subject Performance</CardTitle>
+                      <CardDescription>Your average scores by subject</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={subjectPerformanceData}
+                            margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
+                            layout="vertical"
+                          >
+                            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                            <XAxis type="number" domain={[0, 100]} />
+                            <YAxis type="category" dataKey="name" width={100} />
+                            <Tooltip />
+                            <Bar dataKey="score" name="Average Score" fill="#82ca9d" radius={[0, 4, 4, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Assessment History</CardTitle>
+                    <CardDescription>Your past assessment results</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {userProgress.filter(p => p.assessment_id !== null).length > 0 ? (
+                      <div className="space-y-4">
+                        {userProgress
+                          .filter(p => p.assessment_id !== null)
+                          .map((progress, index) => (
+                            <div key={index} className="flex items-start justify-between border-b pb-4 last:border-0 last:pb-0">
+                              <div>
+                                <p className="font-medium">{progress.assessments?.title || "Assessment"}</p>
+                                <p className="text-sm text-muted-foreground">{formatDate(progress.completed_at)}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {progress.score !== null ? (
+                                  <>
+                                    {progress.score >= 70 ? <CheckCircle className="h-5 w-5 text-green-500" /> : <AlertCircle className="h-5 w-5 text-amber-500" />}
+                                    <span className={`font-medium ${getPerformanceColor(progress.score)}`}>
+                                      {progress.score}%
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground">Completed</span>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        }
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">No assessment history found</p>
+                        <Button className="mt-4" onClick={() => navigate('/subjects')}>Take an Assessment</Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              {/* Activity Tab */}
+              <TabsContent value="activity" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Learning Timeline</CardTitle>
+                    <CardDescription>Your activity over the past week</CardDescription>
+                  </CardHeader>
+                  <CardContent>
                     <div className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={weeklyProgress}>
-                          <defs>
-                            <linearGradient id="progressGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
-                              <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.1}/>
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                          <XAxis dataKey="name" />
-                          <YAxis tickFormatter={(value) => `${value}%`} />
-                          <Tooltip formatter={(value) => [`${value}%`, 'Progress']} />
-                          <Area 
-                            type="monotone" 
-                            dataKey="progress" 
-                            stroke="hsl(var(--primary))" 
-                            fillOpacity={1} 
-                            fill="url(#progressGradient)" 
-                          />
-                        </AreaChart>
+                        <RechartsLineChart
+                          data={timelineData}
+                          margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="day" />
+                          <YAxis />
+                          <Tooltip />
+                          <Line type="monotone" dataKey="value" name="Activities" stroke="#8884d8" strokeWidth={2} />
+                        </RechartsLineChart>
                       </ResponsiveContainer>
                     </div>
-                  </TabsContent>
-                  <TabsContent value="month">
-                    <div className="flex items-center justify-center h-80 text-muted-foreground">
-                      Monthly data visualization will appear here
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="year">
-                    <div className="flex items-center justify-center h-80 text-muted-foreground">
-                      Yearly data visualization will appear here
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Subject Progress</CardTitle>
-                <CardDescription>Completion rate by subject</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      layout="vertical"
-                      data={subjectProgress}
-                      margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
-                    >
-                      <XAxis type="number" tickFormatter={(value) => `${value}%`} />
-                      <YAxis type="category" dataKey="subject" width={80} />
-                      <Tooltip formatter={(value) => [`${value}%`, 'Completed']} />
-                      <Bar 
-                        dataKey="completed" 
-                        radius={[0, 4, 4, 0]}
-                        fill="hsl(var(--primary))" 
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex justify-center mt-4">
-                  <Link to="/subjects">
-                    <Button variant="outline" size="sm" className="flex items-center">
-                      View all subjects
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Activity</CardTitle>
-                <CardDescription>Your latest learning interactions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentActivities.map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        {activity.icon}
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Activity History</CardTitle>
+                    <CardDescription>All your learning activities</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {userProgress.length > 0 ? (
+                      <div className="space-y-4">
+                        {userProgress.map((activity, index) => (
+                          <div key={index} className="flex items-start justify-between border-b pb-4 last:border-0 last:pb-0">
+                            <div className="flex items-start gap-4">
+                              <div className="rounded-full bg-primary/10 p-2">
+                                {activity.assessment_id ? (
+                                  <FileCheck className="h-4 w-4 text-primary" />
+                                ) : (
+                                  <BookOpen className="h-4 w-4 text-primary" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-medium">{activity.assessments?.title || activity.topics?.name || "Completed assessment"}</p>
+                                <p className="text-sm text-muted-foreground">{formatDate(activity.completed_at)}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {activity.score !== null ? (
+                                <>
+                                  {activity.score >= 70 ? <CheckCircle className="h-5 w-5 text-green-500" /> : <AlertCircle className="h-5 w-5 text-amber-500" />}
+                                  <span className={`font-medium ${getPerformanceColor(activity.score)}`}>
+                                    {activity.score}%
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground">Completed</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex-1">
-                        <h3 className="font-medium">{activity.title}</h3>
-                        <p className="text-sm text-foreground/70">{activity.description}</p>
-                        <p className="text-xs text-foreground/50 mt-1">{activity.time}</p>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">No activity history found</p>
+                        <Button className="mt-4" onClick={() => navigate('/subjects')}>Start Learning</Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4 pt-4 border-t">
-                  <Button variant="ghost" size="sm" className="w-full flex items-center justify-center">
-                    View all activity
-                    <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Recommended for You</CardTitle>
-                <CardDescription>Based on your learning pattern</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recommendedCourses.map((course) => (
-                    <div key={course.id} className="flex items-start gap-3">
-                      <div className="w-12 h-12 relative rounded-md overflow-hidden flex-shrink-0 bg-primary/10">
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          {course.icon}
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-medium">{course.title}</h3>
-                        <p className="text-sm text-foreground/70">{course.description}</p>
-                        <div className="mt-2">
-                          <Link to={`/courses/${course.id}`}>
-                            <Button variant="link" size="sm" className="px-0 h-auto text-primary">
-                              Start learning
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Upcoming Challenges</CardTitle>
-                <CardDescription>Collaborative competitions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {upcomingChallenges.map((challenge) => (
-                    <div key={challenge.id} className="border rounded-lg p-4">
-                      <h3 className="font-medium">{challenge.title}</h3>
-                      <div className="mt-2 space-y-2">
-                        <div className="flex items-center text-sm text-foreground/70">
-                          <Clock className="w-4 h-4 mr-2" />
-                          {challenge.date}
-                        </div>
-                        <div className="flex items-center text-sm text-foreground/70">
-                          <Users className="w-4 h-4 mr-2" />
-                          {challenge.participants} participants
-                        </div>
-                        <div className="flex items-center text-sm text-foreground/70">
-                          <Award className="w-4 h-4 mr-2" />
-                          {challenge.difficulty} difficulty
-                        </div>
-                      </div>
-                      <div className="mt-3">
-                        <Link to={`/challenges/${challenge.id}`}>
-                          <Button variant="outline" size="sm" className="w-full">
-                            Join Challenge
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4">
-                  <Link to="/challenges">
-                    <Button variant="ghost" size="sm" className="w-full flex items-center justify-center">
-                      View all challenges
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </main>
-      <Footer />
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
+      </div>
     </div>
   );
 };

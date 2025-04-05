@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,17 +11,101 @@ import { useToast } from '@/hooks/use-toast';
 import { BrainCircuit, Braces, ChevronLeft, FlaskConical, GraduationCap } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Register = () => {
   const [activeTab, setActiveTab] = useState("student");
+  const { signUp, user } = useAuth();
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
   
-  const handleSubmit = (e: React.FormEvent) => {
+  // Student form state
+  const [studentFirstName, setStudentFirstName] = useState('');
+  const [studentLastName, setStudentLastName] = useState('');
+  const [studentEmail, setStudentEmail] = useState('');
+  const [studentPassword, setStudentPassword] = useState('');
+  const [gradeLevel, setGradeLevel] = useState('7');
+  const [interests, setInterests] = useState<string[]>([]);
+  
+  // Parent form state
+  const [parentFirstName, setParentFirstName] = useState('');
+  const [parentLastName, setParentLastName] = useState('');
+  const [parentEmail, setParentEmail] = useState('');
+  const [parentPassword, setParentPassword] = useState('');
+  const [childrenCount, setChildrenCount] = useState('1');
+  
+  // If user is already logged in, redirect to dashboard
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  const toggleInterest = (interest: string) => {
+    if (interests.includes(interest)) {
+      setInterests(interests.filter(i => i !== interest));
+    } else {
+      setInterests([...interests, interest]);
+    }
+  };
+  
+  const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Account created!",
-      description: "We've created your account. You can now sign in.",
-    });
+    
+    if (!studentFirstName || !studentLastName || !studentEmail || !studentPassword) {
+      toast({
+        title: "Registration error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      const userData = {
+        full_name: `${studentFirstName} ${studentLastName}`,
+        first_name: studentFirstName,
+        last_name: studentLastName,
+        grade: parseInt(gradeLevel, 10),
+        role: 'student',
+        interests: interests,
+      };
+      
+      await signUp(studentEmail, studentPassword, userData);
+    } catch (error) {
+      console.error("Registration error:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleParentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!parentFirstName || !parentLastName || !parentEmail || !parentPassword) {
+      toast({
+        title: "Registration error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      const userData = {
+        full_name: `${parentFirstName} ${parentLastName}`,
+        first_name: parentFirstName,
+        last_name: parentLastName,
+        role: 'parent',
+        children_count: parseInt(childrenCount, 10),
+      };
+      
+      await signUp(parentEmail, parentPassword, userData);
+    } catch (error) {
+      console.error("Registration error:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -61,31 +145,56 @@ const Register = () => {
                   </TabsList>
                   
                   <TabsContent value="student">
-                    <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                    <form onSubmit={handleStudentSubmit} className="space-y-4 mt-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="firstName">First name</Label>
-                          <Input id="firstName" required />
+                          <Input 
+                            id="firstName" 
+                            value={studentFirstName}
+                            onChange={(e) => setStudentFirstName(e.target.value)}
+                            required 
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="lastName">Last name</Label>
-                          <Input id="lastName" required />
+                          <Input 
+                            id="lastName" 
+                            value={studentLastName}
+                            onChange={(e) => setStudentLastName(e.target.value)}
+                            required 
+                          />
                         </div>
                       </div>
                       
                       <div className="space-y-2">
                         <Label htmlFor="email">Email</Label>
-                        <Input id="email" type="email" required />
+                        <Input 
+                          id="email" 
+                          type="email" 
+                          value={studentEmail}
+                          onChange={(e) => setStudentEmail(e.target.value)}
+                          required 
+                        />
                       </div>
                       
                       <div className="space-y-2">
                         <Label htmlFor="password">Password</Label>
-                        <Input id="password" type="password" required />
+                        <Input 
+                          id="password" 
+                          type="password" 
+                          value={studentPassword}
+                          onChange={(e) => setStudentPassword(e.target.value)}
+                          required 
+                        />
                       </div>
                       
                       <div className="space-y-2">
                         <Label htmlFor="grade">Grade Level</Label>
-                        <Select defaultValue="7">
+                        <Select 
+                          value={gradeLevel} 
+                          onValueChange={setGradeLevel}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Select your grade" />
                           </SelectTrigger>
@@ -104,55 +213,99 @@ const Register = () => {
                       <div className="space-y-2">
                         <Label>Subjects of Interest</Label>
                         <div className="grid grid-cols-3 gap-2">
-                          <Button type="button" variant="outline" className="flex items-center gap-2 justify-start h-auto py-2">
-                            <svg className="w-4 h-4 text-stem-purple" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <Button 
+                            type="button" 
+                            variant={interests.includes('math') ? "default" : "outline"} 
+                            className="flex items-center gap-2 justify-start h-auto py-2"
+                            onClick={() => toggleInterest('math')}
+                          >
+                            <svg className={`w-4 h-4 ${interests.includes('math') ? "text-white" : "text-stem-purple"}`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                               <path d="M12 22l-3-3m3 3l3-3m-3 3V10m-9-8l3 3m-3-3l3 3M3 2v12m18-12l-3 3m3-3l-3 3m3-3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                             </svg>
                             Math
                           </Button>
-                          <Button type="button" variant="outline" className="flex items-center gap-2 justify-start h-auto py-2">
-                            <FlaskConical className="w-4 h-4 text-stem-teal" />
+                          <Button 
+                            type="button" 
+                            variant={interests.includes('science') ? "default" : "outline"} 
+                            className="flex items-center gap-2 justify-start h-auto py-2"
+                            onClick={() => toggleInterest('science')}
+                          >
+                            <FlaskConical className={`w-4 h-4 ${interests.includes('science') ? "text-white" : "text-stem-teal"}`} />
                             Science
                           </Button>
-                          <Button type="button" variant="outline" className="flex items-center gap-2 justify-start h-auto py-2">
-                            <Braces className="w-4 h-4 text-stem-blue" />
+                          <Button 
+                            type="button" 
+                            variant={interests.includes('coding') ? "default" : "outline"} 
+                            className="flex items-center gap-2 justify-start h-auto py-2"
+                            onClick={() => toggleInterest('coding')}
+                          >
+                            <Braces className={`w-4 h-4 ${interests.includes('coding') ? "text-white" : "text-stem-blue"}`} />
                             Coding
                           </Button>
                         </div>
                       </div>
                       
-                      <Button type="submit" className="w-full mt-6">
-                        Create Account
+                      <Button 
+                        type="submit" 
+                        className="w-full mt-6"
+                        disabled={isLoading}
+                      >
+                        {isLoading ? "Creating Account..." : "Create Account"}
                       </Button>
                     </form>
                   </TabsContent>
                   
                   <TabsContent value="parent">
-                    <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                    <form onSubmit={handleParentSubmit} className="space-y-4 mt-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="parentFirstName">First name</Label>
-                          <Input id="parentFirstName" required />
+                          <Input 
+                            id="parentFirstName" 
+                            value={parentFirstName}
+                            onChange={(e) => setParentFirstName(e.target.value)}
+                            required 
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="parentLastName">Last name</Label>
-                          <Input id="parentLastName" required />
+                          <Input 
+                            id="parentLastName" 
+                            value={parentLastName}
+                            onChange={(e) => setParentLastName(e.target.value)}
+                            required 
+                          />
                         </div>
                       </div>
                       
                       <div className="space-y-2">
                         <Label htmlFor="parentEmail">Email</Label>
-                        <Input id="parentEmail" type="email" required />
+                        <Input 
+                          id="parentEmail" 
+                          type="email" 
+                          value={parentEmail}
+                          onChange={(e) => setParentEmail(e.target.value)}
+                          required 
+                        />
                       </div>
                       
                       <div className="space-y-2">
                         <Label htmlFor="parentPassword">Password</Label>
-                        <Input id="parentPassword" type="password" required />
+                        <Input 
+                          id="parentPassword" 
+                          type="password" 
+                          value={parentPassword}
+                          onChange={(e) => setParentPassword(e.target.value)}
+                          required 
+                        />
                       </div>
                       
                       <div className="space-y-2">
                         <Label htmlFor="childrenCount">Number of Children</Label>
-                        <Select defaultValue="1">
+                        <Select 
+                          value={childrenCount} 
+                          onValueChange={setChildrenCount}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Select number" />
                           </SelectTrigger>
@@ -165,8 +318,12 @@ const Register = () => {
                         </Select>
                       </div>
                       
-                      <Button type="submit" className="w-full mt-6">
-                        Create Parent Account
+                      <Button 
+                        type="submit" 
+                        className="w-full mt-6"
+                        disabled={isLoading}
+                      >
+                        {isLoading ? "Creating Account..." : "Create Parent Account"}
                       </Button>
                     </form>
                   </TabsContent>

@@ -3,15 +3,47 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Beaker, BookOpen, BrainCircuit, Menu, X } from 'lucide-react';
+import { 
+  Beaker, 
+  BookOpen, 
+  BrainCircuit, 
+  LogOut,
+  Menu, 
+  X 
+} from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const Navbar = ({ userLoggedIn = false }) => {
   const isMobile = useIsMobile();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const { user, signOut } = useAuth();
 
   const toggleMenu = () => setMenuOpen(!menuOpen);
+  
+  const handleSignOut = async () => {
+    await signOut();
+  };
+  
+  // Get initials for avatar fallback
+  const getInitials = () => {
+    if (!user?.user_metadata?.full_name) return 'ST';
+    
+    const nameParts = user.user_metadata.full_name.split(' ');
+    if (nameParts.length >= 2) {
+      return `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase();
+    }
+    return nameParts[0].substring(0, 2).toUpperCase();
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-background/80 border-b border-border">
@@ -49,17 +81,34 @@ export const Navbar = ({ userLoggedIn = false }) => {
               </Link>
             </div>
             
-            {userLoggedIn ? (
+            {user ? (
               <div className="flex items-center gap-3">
                 <Link to="/dashboard">
                   <Button variant="outline" size="sm">Dashboard</Button>
                 </Link>
-                <Link to="/profile">
-                  <Avatar>
-                    <AvatarImage src="/placeholder.svg" />
-                    <AvatarFallback className="bg-primary text-primary-foreground">ST</AvatarFallback>
-                  </Avatar>
-                </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Avatar className="cursor-pointer">
+                      <AvatarImage src="/placeholder.svg" />
+                      <AvatarFallback className="bg-primary text-primary-foreground">{getInitials()}</AvatarFallback>
+                    </Avatar>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to="/profile" className="cursor-pointer w-full">Profile</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/settings" className="cursor-pointer w-full">Settings</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleSignOut} className="text-destructive cursor-pointer">
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Log out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ) : (
               <div className="flex items-center gap-3">
@@ -95,7 +144,7 @@ export const Navbar = ({ userLoggedIn = false }) => {
           </Link>
         </div>
         
-        {userLoggedIn ? (
+        {user ? (
           <div className="flex flex-col gap-4 mt-4">
             <Link to="/dashboard" onClick={toggleMenu}>
               <Button className="w-full">Dashboard</Button>
@@ -103,6 +152,13 @@ export const Navbar = ({ userLoggedIn = false }) => {
             <Link to="/profile" onClick={toggleMenu}>
               <Button variant="outline" className="w-full">Profile</Button>
             </Link>
+            <Button 
+              variant="destructive" 
+              className="w-full mt-2"
+              onClick={handleSignOut}
+            >
+              Log out
+            </Button>
           </div>
         ) : (
           <div className="flex flex-col gap-4 mt-4">

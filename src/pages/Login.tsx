@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,44 +11,17 @@ import { BrainCircuit, ChevronLeft } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 
 const Login = () => {
   const { signIn, user } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  // If user is already logged in, check if they need the welcome flow or go to dashboard
+  // If user is already logged in, redirect to dashboard
   if (user) {
-    // Check if user has a grade set
-    const checkUserGrade = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('grade')
-          .eq('id', user.id)
-          .single();
-          
-        if (error) throw error;
-        
-        // If user has no grade set, send to welcome flow
-        if (data && data.grade === null) {
-          return navigate('/welcome');
-        }
-        
-        // Otherwise, go to dashboard
-        return navigate('/dashboard');
-      } catch (error) {
-        console.error('Error checking user grade:', error);
-        return navigate('/dashboard'); // Default to dashboard on error
-      }
-    };
-    
-    checkUserGrade();
-    return null; // Return null while async check happens
+    return <Navigate to="/dashboard" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -65,8 +39,6 @@ const Login = () => {
     try {
       setIsLoading(true);
       await signIn(email, password);
-      
-      // After successful login, the "if (user)" block will handle redirection
     } catch (error) {
       console.error("Login error:", error);
     } finally {

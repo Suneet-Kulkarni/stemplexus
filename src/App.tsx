@@ -17,6 +17,7 @@ import TopicView from "./pages/TopicView";
 import Assessment from "./pages/Assessment";
 import Challenges from "./pages/Challenges";
 import ChallengeView from "./pages/ChallengeView";
+import WelcomePage from "./pages/WelcomePage";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,14 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route 
+              path="/welcome" 
+              element={
+                <ProtectedRoute>
+                  <WelcomePage />
+                </ProtectedRoute>
+              } 
+            />
             <Route 
               path="/dashboard" 
               element={

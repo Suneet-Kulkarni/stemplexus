@@ -1,419 +1,329 @@
 
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Clock, Calendar, Trophy, Send, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { Tables } from '@/integrations/supabase/types';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ChevronLeft, Clock, Award, Send, ArrowRight } from 'lucide-react';
 
 const ChallengeView = () => {
   const { challengeId } = useParams<{ challengeId: string }>();
-  const navigate = useNavigate();
-  const { toast } = useToast();
   const { user } = useAuth();
-  
-  const [challenge, setChallenge] = useState<Tables<'challenges'> | null>(null);
-  const [submission, setSubmission] = useState<Tables<'submissions'> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [submissionContent, setSubmissionContent] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [topSubmissions, setTopSubmissions] = useState<Tables<'submissions'>[]>([]);
+  const { toast } = useToast();
+  const [submission, setSubmission] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { data: challenge, isLoading } = useQuery({
+    queryKey: ['challenge', challengeId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('challenges')
+        .select('*')
+        .eq('id', challengeId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!challengeId,
+  });
+
+  const { data: existingSubmission, refetch: refetchSubmission } = useQuery({
+    queryKey: ['submission', challengeId, user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      
+      const { data, error } = await supabase
+        .from('submissions')
+        .select('*')
+        .eq('challenge_id', challengeId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || null;
+    },
+    enabled: !!challengeId && !!user,
+  });
 
   useEffect(() => {
-    async function fetchChallengeData() {
-      if (!challengeId) return;
-      
-      try {
-        setLoading(true);
-        
-        // Fetch challenge
-        const { data: challengeData, error: challengeError } = await supabase
-          .from('challenges')
-          .select('*')
-          .eq('id', challengeId)
-          .single();
-        
-        if (challengeError) throw challengeError;
-        setChallenge(challengeData);
-        
-        // Fetch user's submission if logged in
-        if (user) {
-          const { data: submissionData, error: submissionError } = await supabase
-            .from('submissions')
-            .select('*')
-            .eq('challenge_id', challengeId)
-            .eq('user_id', user.id)
-            .single();
-          
-          if (!submissionError) {
-            setSubmission(submissionData);
-            setSubmissionContent(submissionData.content);
-          }
-        }
-        
-        // Fetch top submissions
-        const { data: topSubData, error: topSubError } = await supabase
-          .from('submissions')
-          .select('*')
-          .eq('challenge_id', challengeId)
-          .order('score', { ascending: false })
-          .limit(5);
-        
-        if (!topSubError && topSubData) {
-          setTopSubmissions(topSubData);
-        }
-      } catch (error: any) {
-        toast({
-          title: "Error fetching challenge",
-          description: error.message,
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
+    if (existingSubmission) {
+      setSubmission(existingSubmission.content);
     }
-
-    fetchChallengeData();
-  }, [challengeId, user, toast]);
+  }, [existingSubmission]);
 
   const handleSubmit = async () => {
-    if (!user || !challengeId || !submissionContent.trim()) {
-      toast({
-        title: "Submission error",
-        description: "Please write your solution before submitting",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!user || !challenge || !submission.trim()) return;
+    
+    setIsSubmitting(true);
     
     try {
-      setSubmitting(true);
-      
-      if (submission) {
+      if (existingSubmission) {
         // Update existing submission
         const { error } = await supabase
           .from('submissions')
           .update({
-            content: submissionContent,
+            content: submission,
             submitted_at: new Date().toISOString(),
-            score: null, // Reset score on update
-            feedback: null // Reset feedback on update
           })
-          .eq('id', submission.id);
-        
+          .eq('id', existingSubmission.id);
+          
         if (error) throw error;
         
         toast({
           title: "Submission updated",
-          description: "Your solution has been updated successfully",
+          description: "Your solution has been updated successfully.",
         });
       } else {
         // Create new submission
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('submissions')
           .insert({
-            user_id: user.id,
             challenge_id: challengeId,
-            content: submissionContent,
-            submitted_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-        
+            user_id: user.id,
+            content: submission,
+          });
+          
         if (error) throw error;
         
-        setSubmission(data);
-        
         toast({
-          title: "Submission successful",
-          description: "Your solution has been submitted for evaluation",
+          title: "Submission received",
+          description: "Your solution has been submitted successfully.",
         });
       }
       
-      // Refresh top submissions
-      const { data: topSubData } = await supabase
-        .from('submissions')
-        .select('*')
-        .eq('challenge_id', challengeId)
-        .order('score', { ascending: false })
-        .limit(5);
+      // Refresh submission data
+      refetchSubmission();
       
-      if (topSubData) {
-        setTopSubmissions(topSubData);
-      }
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Error submitting challenge:', error);
       toast({
         title: "Submission failed",
-        description: error.message,
+        description: "There was an error submitting your solution. Please try again.",
         variant: "destructive",
       });
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch(difficulty) {
-      case 'beginner': return 'bg-green-100 text-green-800';
-      case 'intermediate': return 'bg-yellow-100 text-yellow-800';
-      case 'advanced': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!challenge) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-800">Challenge not found</h1>
+          <p className="mt-4 text-gray-600">The challenge you're looking for doesn't exist or has been removed.</p>
+          <Button asChild className="mt-6">
+            <Link to="/challenges">Back to Challenges</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'No deadline';
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', { 
-      month: 'short', 
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
       day: 'numeric',
-      year: 'numeric'
-    }).format(date);
+    });
   };
 
-  const getTimeRemaining = (deadline: string | null) => {
-    if (!deadline) return 'No deadline';
-    
-    const deadlineDate = new Date(deadline);
-    const now = new Date();
-    
-    if (deadlineDate < now) return 'Expired';
-    
-    const diffMs = deadlineDate.getTime() - now.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffDays > 0) {
-      return `${diffDays} day${diffDays > 1 ? 's' : ''} left`;
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case 'beginner':
+        return 'bg-green-100 text-green-800';
+      case 'intermediate':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'advanced':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
-    
-    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    return `${diffHours} hour${diffHours > 1 ? 's' : ''} left`;
   };
 
-  const isDeadlinePassed = () => {
-    if (!challenge || !challenge.deadline) return false;
+  const hasDeadlinePassed = () => {
+    if (!challenge.deadline) return false;
     return new Date(challenge.deadline) < new Date();
   };
 
   return (
-    <div className="container py-8">
-      <Button 
-        variant="ghost" 
-        className="mb-4 flex items-center gap-1" 
-        onClick={() => navigate('/challenges')}
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to Challenges
-      </Button>
-      
-      {loading ? (
-        <div className="flex justify-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-        </div>
-      ) : (
-        <>
-          <div className="mb-6">
-            <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
-              <div>
-                <h1 className="text-3xl font-bold">{challenge?.title}</h1>
-                <div className="flex flex-wrap items-center gap-3 mt-2">
-                  <Badge className={getDifficultyColor(challenge?.difficulty || 'beginner')}>
-                    {challenge?.difficulty.charAt(0).toUpperCase() + challenge?.difficulty.slice(1)}
-                  </Badge>
-                  
-                  {challenge?.points && (
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <Trophy className="h-3 w-3" /> {challenge.points} points
+    <div className="container mx-auto py-8 px-4">
+      <Breadcrumb className="mb-6">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink as={Link} to="/dashboard">Dashboard</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink as={Link} to="/challenges">Challenges</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink>{challenge.title}</BreadcrumbLink>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <Button variant="ghost" size="sm" className="mb-4" asChild>
+            <Link to="/challenges">
+              <ChevronLeft className="mr-1 h-4 w-4" /> Back to challenges
+            </Link>
+          </Button>
+          
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-2xl">{challenge.title}</CardTitle>
+                  <CardDescription className="mt-2 flex items-center">
+                    <Badge className={`mr-2 ${getDifficultyColor(challenge.difficulty)}`}>
+                      {challenge.difficulty.charAt(0).toUpperCase() + challenge.difficulty.slice(1)}
                     </Badge>
-                  )}
-                  
-                  {challenge?.deadline && (
-                    <Badge 
-                      variant="outline" 
-                      className={`flex items-center gap-1 ${isDeadlinePassed() ? 'text-red-500' : ''}`}
-                    >
-                      <Clock className="h-3 w-3" /> {getTimeRemaining(challenge.deadline)}
-                    </Badge>
-                  )}
+                    <span className="flex items-center text-sm text-muted-foreground">
+                      <Award className="mr-1 h-4 w-4" /> {challenge.points} points
+                    </span>
+                    {challenge.deadline && (
+                      <span className="flex items-center ml-4 text-sm text-muted-foreground">
+                        <Clock className="mr-1 h-4 w-4" /> Due: {formatDate(challenge.deadline)}
+                      </span>
+                    )}
+                  </CardDescription>
                 </div>
               </div>
-              
-              {challenge?.deadline && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="h-4 w-4" />
-                  <span>Due: {formatDate(challenge.deadline)}</span>
-                </div>
-              )}
-            </div>
-          </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="prose max-w-none">
+                <h3 className="text-lg font-medium">Description</h3>
+                <p>{challenge.description}</p>
+              </div>
+            </CardContent>
+          </Card>
           
-          <Tabs defaultValue="challenge" className="w-full">
-            <TabsList className="mb-6">
-              <TabsTrigger value="challenge">Challenge</TabsTrigger>
-              <TabsTrigger value="submit">Your Submission</TabsTrigger>
-              <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="challenge">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Challenge Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="prose max-w-none">
-                    <p>{challenge?.description || "No description provided."}</p>
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Your Solution</CardTitle>
+              <CardDescription>
+                {existingSubmission ? 'Update your submission below' : 'Submit your solution below'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                placeholder="Write your solution here..."
+                value={submission}
+                onChange={(e) => setSubmission(e.target.value)}
+                className="min-h-[200px]"
+                disabled={hasDeadlinePassed()}
+              />
+            </CardContent>
+            <CardFooter className="flex justify-between">
+              <div>
+                {existingSubmission && (
+                  <span className="text-sm text-muted-foreground">
+                    Last updated: {new Date(existingSubmission.submitted_at).toLocaleString()}
+                  </span>
+                )}
+              </div>
+              <Button 
+                onClick={handleSubmit} 
+                disabled={!submission.trim() || isSubmitting || hasDeadlinePassed()}
+              >
+                {isSubmitting ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Submitting...
                   </div>
-                  
-                  {/* Sample challenge requirements - in a real app, these would come from the database */}
-                  <div className="space-y-4 mt-6">
-                    <h3 className="text-lg font-semibold">Requirements</h3>
-                    <ul className="list-disc pl-5 space-y-2">
-                      <li>Demonstrate understanding of the core concepts related to this challenge</li>
-                      <li>Show your work and explain your reasoning clearly</li>
-                      <li>Use diagrams, charts, or other visual aids if helpful</li>
-                      <li>Submit your solution before the deadline</li>
-                    </ul>
-                    
-                    <h3 className="text-lg font-semibold mt-4">Evaluation Criteria</h3>
-                    <ul className="list-disc pl-5 space-y-2">
-                      <li>Correctness of solution (50%)</li>
-                      <li>Clarity of explanation (30%)</li>
-                      <li>Creativity and innovation (20%)</li>
-                    </ul>
-                    
-                    <h3 className="text-lg font-semibold mt-4">Submission Guidelines</h3>
-                    <p>
-                      Type your solution in the "Your Submission" tab. You can edit and resubmit your 
-                      solution until the deadline. After submission, you'll receive feedback and a score 
-                      based on the evaluation criteria.
+                ) : (
+                  <div className="flex items-center">
+                    <Send className="mr-2 h-4 w-4" />
+                    {existingSubmission ? 'Update Submission' : 'Submit Solution'}
+                  </div>
+                )}
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+        
+        <div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Progress</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="flex justify-between mb-1">
+                  <span className="text-sm font-medium">Completion</span>
+                  <span className="text-sm font-medium">
+                    {existingSubmission ? '1/1' : '0/1'}
+                  </span>
+                </div>
+                <Progress value={existingSubmission ? 100 : 0} className="h-2" />
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h4 className="font-medium mb-2">Status</h4>
+                <Badge className={existingSubmission ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
+                  {existingSubmission ? 'Submitted' : 'Not Submitted'}
+                </Badge>
+              </div>
+              
+              {existingSubmission && existingSubmission.score !== null && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="font-medium mb-2">Your Score</h4>
+                    <div className="text-2xl font-bold">
+                      {existingSubmission.score} / {challenge.points}
+                    </div>
+                  </div>
+                </>
+              )}
+              
+              {existingSubmission && existingSubmission.feedback && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="font-medium mb-2">Feedback</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {existingSubmission.feedback}
                     </p>
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="submit">
-              <Card>
-                <CardHeader>
-                  <CardTitle>
-                    {submission ? "Edit Your Submission" : "Submit Your Solution"}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {isDeadlinePassed() && !submission ? (
-                    <div className="text-center py-6">
-                      <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium mb-2">Deadline has passed</h3>
-                      <p className="text-muted-foreground">You can no longer submit a solution for this challenge</p>
-                    </div>
-                  ) : (
-                    <>
-                      <Textarea
-                        placeholder="Type your solution here..."
-                        className="min-h-[300px]"
-                        value={submissionContent}
-                        onChange={(e) => setSubmissionContent(e.target.value)}
-                        disabled={submitting}
-                      />
-                      
-                      <div className="flex justify-end">
-                        <Button 
-                          className="flex items-center gap-2" 
-                          onClick={handleSubmit}
-                          disabled={submitting || !submissionContent.trim()}
-                        >
-                          {submitting ? (
-                            <>
-                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
-                              {submission ? "Updating..." : "Submitting..."}
-                            </>
-                          ) : (
-                            <>
-                              {submission ? (
-                                <>
-                                  <CheckCircle className="h-4 w-4" /> Update Submission
-                                </>
-                              ) : (
-                                <>
-                                  <Send className="h-4 w-4" /> Submit Solution
-                                </>
-                              )}
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                      
-                      {submission?.feedback && (
-                        <div className="mt-6 p-4 bg-muted rounded-lg">
-                          <h4 className="font-medium mb-2">Feedback on your submission:</h4>
-                          <p className="text-sm">{submission.feedback}</p>
-                          
-                          {submission.score !== null && (
-                            <div className="mt-4 flex items-center gap-2">
-                              <span className="font-medium">Score:</span>
-                              <Badge className={`${submission.score >= 70 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                {submission.score}%
-                              </Badge>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="leaderboard">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Top Submissions</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {topSubmissions.length > 0 ? (
-                    <div className="space-y-4">
-                      {topSubmissions.map((sub, index) => (
-                        <div 
-                          key={sub.id} 
-                          className="flex items-center justify-between p-4 rounded-lg border border-border"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className={`flex h-8 w-8 items-center justify-center rounded-full ${index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                              {index + 1}
-                            </div>
-                            <div>
-                              <p className="font-medium">Participant #{sub.user_id?.substring(0, 6)}</p>
-                              <p className="text-sm text-muted-foreground">
-                                Submitted on {formatDate(sub.submitted_at)}
-                              </p>
-                            </div>
-                          </div>
-                          
-                          {sub.score !== null && (
-                            <Badge className={`${sub.score >= 80 ? 'bg-green-100 text-green-800' : sub.score >= 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-                              {sub.score}%
-                            </Badge>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <h3 className="text-lg font-medium mb-2">No submissions yet</h3>
-                      <p className="text-muted-foreground">Be the first to submit a solution!</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </>
-      )}
+                </>
+              )}
+            </CardContent>
+            <CardFooter>
+              <Button variant="outline" className="w-full" asChild>
+                <Link to="/challenges">
+                  View More Challenges <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };
